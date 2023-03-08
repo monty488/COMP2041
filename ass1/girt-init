@@ -1,0 +1,22 @@
+#!/bin/dash
+
+# check if the .girt directory exists
+if test -r ".girt"
+then
+    echo "girt-init: error: .girt already exists"
+    exit 1
+else
+    # create all the files and directories
+    # associated to girt
+    mkdir .girt
+    mkdir .girt/branches/
+    mkdir .girt/branches/master
+    mkdir .girt/logs
+    mkdir .girt/commits
+    mkdir .girt/commits/master
+    touch .girt/logs/log
+    mkdir .girt/status
+    mkdir .girt/cwd_backup
+    echo master > .girt/current_branch
+    echo "Initialized empty girt repository in .girt"
+fi

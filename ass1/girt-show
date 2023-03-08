@@ -1,0 +1,61 @@
+#!/bin/dash
+
+# check if the .girt directory exists
+if ! test -d .girt
+then
+    echo "girt-show: error: girt repository directory .girt not found"
+    exit 1
+fi
+
+# check if the arguments given is valid
+if test $# -ne 1
+then
+    echo "usage: girt-show <commit>:<filename>"
+    exit 0
+else
+    # cut the given argument into the form needed
+    check_argument=$(echo $1 | grep -E "[0-9]*:.*")
+    if test "$check_argument" = ""
+    then
+        echo "girt-show: error: invalid object '$1'"
+        exit 1
+    fi
+    current_branch=`head .girt/current_branch`
+    commit_num=`echo $1 | cut -d':' -f1`
+    filename=`echo $1 | cut -d':' -f2`
+    file_name_check=$(echo $filename | grep -E "^[a-zA-Z0-9].*$")
+    
+
+    # check if the filename is valid
+    if test "$file_name_check" = ""
+    then
+        echo "girt-show: error: invalid filename '$filename'"
+        exit 1
+    fi
+
+    # check if the commit number given exists
+    if test -d .girt/commits/$current_branch/$commit_num
+    then
+        # check if the commit num is not given
+        if test "$commit_num" = ""
+        then
+            # check if the file exists in the index
+            if test -f .girt/index/$current_branch/$filename
+            then
+                cat .girt/index/$current_branch/$filename
+            else
+                echo "girt-show: error: '$filename' not found in index"
+            fi
+        else
+            # CHeck if the file exists in the given commit num
+            if test -f .girt/commits/$current_branch/$commit_num/$filename
+            then
+                cat .girt/commits/$current_branch/$commit_num/$filename
+            else
+                echo "girt-show: error: '$filename' not found in commit $commit_num"
+            fi
+        fi
+    else
+        echo "girt-show: error: unknown commit '$commit_num'"
+    fi
+fi

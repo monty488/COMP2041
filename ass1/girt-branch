@@ -1,0 +1,95 @@
+#!/bin/dash
+
+# check if the .girt directory exists
+if ! test -d .girt
+then
+    echo "girt-branch: error: girt repository directory .girt not found"
+    exit 1
+fi
+
+current_branch=`head .girt/current_branch`
+if test ! -d .girt/commits/master/0
+then
+    echo "girt-branch: error: this command can not be run until after the first commit"
+    exit 1
+fi
+
+# test the arguments given, if no arguments are given
+# then list all the current branches
+if test $# -eq 0
+then
+    for branch in $(ls .girt/branches)
+    do
+        echo "$branch"
+    done
+else
+    # check if the delete flag is given
+    if test $1 = '-d'
+    then
+        # cannot delete master branch
+        if test "$2" = "master"
+        then
+            echo "girt-branch: error: can not delete branch 'master'"
+            exit 1
+        fi
+
+        # test if the branch to delete doesn't exist
+        if test ! -d .girt/branches/$2
+        then
+            echo "girt-branch: error: branch '$2' doesn't exist"
+            exit 1
+        else
+            # delete the branch and all associated directories/files
+            if test -d .girt/index/$2
+            then
+                # check if there has been any files added to the index of the branch
+                # to be deleted. This is to check if the index folder has been made
+                # for that specific branch
+                branch_check="$(diff -r .girt/index/$current_branch .girt/index/master)"
+                if test "$branch_check" = ""
+                then
+                    rm -r .girt/branches/$2
+                    rm -r .girt/commits/$2
+                    rm -r .girt/index/$2
+                    echo "Deleted branch '$2'"
+                fi
+            else
+                rm -r .girt/branches/$2
+                rm -r .girt/commits/$2
+                echo "Deleted branch '$2'" 
+            fi
+        fi
+    else
+        # check if the directories for the given branch does not exist
+        # if they dont, make them
+        if test ! -d .girt/branches/$1
+        then
+            mkdir .girt/branches/$1
+            mkdir .girt/commits/$1
+            mkdir .girt/cwd_backup/$1
+            mkdir .girt/index/$1
+
+            # copy all the files in the current directory into the
+            # backup folder for the given branch
+            for file in *
+            do
+                cp $file .girt/cwd_backup/$1
+            done
+
+            # copy all the files in the index of the current branch
+            # into the index of the new branch
+            for file in $(ls .girt/index/$current_branch)
+            do
+                cp .girt/index/$current_branch/$file .girt/index/$1/$file
+            done      
+        else
+            echo "girt-branch: error: branch '$1' already exists"
+            exit 1
+        fi
+    fi
+fi
+
+
+
+
+

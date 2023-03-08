@@ -1,0 +1,73 @@
+#!/bin/dash
+
+# check if the .girt directory exists
+if ! test -d .girt
+then
+    echo "girt-checkout: error: girt repository directory .girt not found"
+    exit 1
+fi
+
+
+current_branch=`head .girt/current_branch`
+num_of_lines=`wc -l .girt/logs/log | cut -d' ' -f1`
+current_commit_num=$(($num_of_lines - 1))
+
+# check if the given checkout branch is already the current branch
+if test "$1" = "$current_branch"
+then
+    echo "Already on '$1'"
+    exit 0
+fi
+
+# test if the checkout branch is a valid branch
+if test ! -d .girt/branches/$1
+then
+    echo "girt-checkout: error: unknown branch '$1'"
+    exit 1
+fi
+
+# copy all the commits of the current branch into the new branch
+cp -a .girt/commits/$current_branch/* .girt/commits/$1
+
+# create a backup of the current directory
+# if the directory does not exist, create one
+if test -d .girt/cwd_backup/$current_branch
+then
+    for file in *
+    do
+        cp $file .girt/cwd_backup/$current_branch/$file
+    done
+else
+    mkdir .girt/cwd_backup/$current_branch
+    for file in *
+    do
+        cp $file .girt/cwd_backup/$current_branch/$file
+    done
+fi
+
+
+if test -d .girt/cwd_backup/$1
+then
+    # loop through the files in the cwd_backup of the given checkout branch
+    # if the files in that do not appear in the index of the checkout branch
+    # remove them from the current directory
+    for file in *
+    do
+        if test ! -f .girt/index/$1/$file
+        then
+            rm $file
+        fi
+    done
+
+    # copy all the files form the backup into the current directory
+    for file in $(ls .girt/cwd_backup/$1)
+    do
+        cp .girt/cwd_backup/$1/$file $file
+    done
+fi
+
+# update the current branch
+echo "$1" > .girt/current_branch
+
+echo "Switched to branch '$1'"
+

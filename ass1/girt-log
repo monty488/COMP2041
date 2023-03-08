@@ -1,0 +1,11 @@
+#!/bin/dash
+
+# check if the .girt directory doesn't exist
+if test ! -d .girt
+then
+    echo "girt-log: error: girt repository directory .girt not found"
+    exit 0
+fi
+
+# output the log file
+cat .girt/logs/log

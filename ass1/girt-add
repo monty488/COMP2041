@@ -1,0 +1,81 @@
+#!/bin/dash
+
+# function to check if the given file exists in the repository
+check_file_in_repo() {
+    current_branch=`head .girt/current_branch`
+    if test -f .girt/index/$current_branch/$1
+    then
+        rm .girt/index/$current_branch/$1
+    fi
+}
+
+# check if the .girt directory exists
+if ! test -d .girt
+then
+    echo "girt-add: error: girt repository directory .girt not found"
+    exit 1
+fi
+
+# check the arguments given are valid
+if test $# -eq 0
+then
+   echo "usage: girt-add <filenames>" 
+   exit 0
+fi
+
+# check if the index folder exists, otherwise create the folder
+current_branch=`head .girt/current_branch`
+if test ! -d .girt/index
+then
+    mkdir .girt/index            
+    mkdir .girt/index/$current_branch
+fi
+if test ! -d .girt/index/$current_branch
+then
+    mkdir .girt/index/$current_branch
+fi
+
+# check if the files are valid
+for file in $@
+do
+    file_name_check=$(echo $file | grep -E "^[a-zA-Z0-9].*$")
+    # check if the filename is valid
+    if test "$file_name_check" = ""
+    then
+        echo "girt-show: error: invalid filename '$file'"
+        exit 1
+    fi
+    # check if the file exists in the current working directory
+    if test -f $file
+    then
+        continue
+    else
+        # check if the file is a directory
+        if test -d $file
+        then
+            echo "girt-add: error: '$file' not a regular file"
+            exit 1
+        fi
+        # check if the file exists in the repo
+        if test -f .girt/index/$current_branch/$file
+        then
+            continue
+        else
+            echo "girt-add: error: can not open '$file'"
+            exit 1
+        fi
+    fi
+done
+
+# loop through all the files, and copy (or remove) them in the index
+for file in $@
+do
+    if test -f $file
+    then
+        cp $file .girt/index/$current_branch/
+    else
+        check_file_in_repo $file
+    fi
+done   
+
+

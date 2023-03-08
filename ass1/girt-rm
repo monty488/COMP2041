@@ -1,0 +1,179 @@
+#!/bin/dash
+
+# check if the .girt directory exists
+if ! test -d .girt
+then
+    echo "girt-rm: error: girt repository directory .girt not found"
+    exit 1
+fi
+
+current_branch=`head .girt/current_branch`
+num_of_lines=`wc -l .girt/logs/log | cut -d' ' -f1`
+current_commit_num=$(($num_of_lines - 1))
+
+# check if the arguments are valid
+if test $# -eq 0
+then
+    echo "usage: girt-rm [--force] [--cached] <filenames>"
+    exit 0
+fi
+
+# if the --force flag is given, remove the files without warning
+if test "$1" = '--force'
+then
+
+    # if the --cached flag is given, remove only the files in the index
+    if test "$2" = "--cached"
+    then
+
+        # skip both the --force and --cached flag
+        shift
+        shift
+        # loop to check if the files exist in the repo
+        for file in $@
+        do
+
+            if test ! -f .girt/index/$current_branch/$file
+            then
+                echo "girt-rm: error: '$file' is not in the girt repository"
+                exit 1
+            fi
+        done
+
+        for file in $@
+        do
+            # remove the from from the index
+            rm .girt/index/$current_branch/$file
+        done
+
+    # remove all files from current directory and the index without warning
+    else
+
+        # skip the --force flag
+        shift 
+        # check if the files exist in the repo
+        for file in $@
+        do
+            if test ! -f .girt/index/$current_branch/$file
+            then
+                echo "girt-rm: error: '$file' is not in the girt repository"
+                exit 1
+            fi
+        done
+
+        for file in $@
+        do
+            #remove the file
+            rm $file
+            rm .girt/index/$current_branch/$file
+        done
+    fi
+
+# if only the --cached flag is given, check and remove the files in the index
+elif test "$1" = "--cached"
+then
+    # skip the --cached argument
+    shift
+
+    # if the file does not exist in the index directory, give an error
+    # saying that the file does not exist in the repository
+    for file in $@
+    do
+        # check if the file exists in the index
+        if test ! -f .girt/index/$current_branch/$file
+        then
+            echo "girt-rm: error: '$file' is not in the girt repository"
+            exit 1
+        fi
+    done
+    
+
+    for file in $@
+    do
+        # check if the file exists in the latest commit
+        if test -f .girt/commits/$current_branch/$current_commit_num/$file
+        then
+            # check if the file in the latest commit is different to the file in the current directory
+            repo_file_check="$(diff $file .girt/commits/$current_branch/$current_commit_num/$file)"
+            staged_file_check="$(diff .girt/index/$current_branch/$file .girt/commits/$current_branch/$current_commit_num/$file)"
+            index_file_check="$(diff $file .girt/index/$current_branch/$file)"
+            if test "$repo_file_check" != "" && test "$staged_file_check" != "" && test "$index_file_check" != ""
+            then
+                echo "girt-rm: error: '$file' in index is different to both to the working file and the repository"
+                exit 1
+            fi
+        fi
+    done
+
+
+    for file in $@
+    do
+        # skip the --cached flag
+        if test "$file" = "--cached"
+        then
+            continue
+        fi
+        # remove the file
+        rm .girt/index/$current_branch/$file
+    done
+
+# check and remove the files from both index and current directory
+else
+
+    for file in $@
+    do
+        # check if the file is in the girt repository
+        if test ! -f .girt/index/$current_branch/$file
+        then
+            echo "girt-rm: error: '$file' is not in the girt repository"
+            exit 1
+        fi
+    done
+
+    for file in $@
+    do
+        # check if the file exists in the latest commit
+        if test -f .girt/commits/$current_branch/$current_commit_num/$file
+        then
+            # check if the file in the latest commit is different to the file in the current directory
+            repo_file_check="$(diff $file .girt/commits/$current_branch/$current_commit_num/$file)"
+            staged_file_check="$(diff .girt/index/$current_branch/$file .girt/commits/$current_branch/$current_commit_num/$file)"
+            index_file_check="$(diff $file .girt/index/$current_branch/$file)"
+            if test "$repo_file_check" != "" && test "$staged_file_check" != "" && test "$index_file_check" != ""
+            then
+                echo "girt-rm: error: '$file' in index is different to both to the working file and the repository"
+                exit 1
+            elif test "$staged_file_check" != ""
+            then
+                echo "girt-rm: error: '$file' has staged changes in the index"
+                exit 1
+
+            elif test "$repo_file_check" != ""
+            then
+                echo "girt-rm: error: '$file' in the repository is different to the working file"
+                exit 1       
+            fi       
+        fi
+
+        # check if the file has staged changes in the index
+        if test -f .girt/commits/$current_branch/$current_commit_num/$file
+        then
+            staged_check="$(diff .girt/index/$current_branch/$file .girt/commits/$current_branch/$current_commit_num/$file)"
+            if test "$staged_check" != ""
+            then
+                echo "girt-rm: error: '$file' in the repository is different to the working file"
+                exit 1   
+            fi
+        else
+            echo "girt-rm: error: '$file' has staged changes in the index"
+            exit 1
+        fi
+    done
+
+    # remove the files after all checks have been completed
+    for file in $@
+    do
+        rm $file
+        rm .girt/index/$current_branch/$file
+    done
+fi

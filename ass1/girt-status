@@ -1,0 +1,121 @@
+#!/bin/dash
+
+# check if the .girt directory exists
+if ! test -d .girt
+then
+    echo "girt-status: error: girt repository directory .girt not found"
+    exit 1
+fi
+
+current_branch=`head .girt/current_branch`
+num_of_lines=`wc -l .girt/logs/"log" | cut -d' ' -f1`
+current_commit_num=$(($num_of_lines - 1))
+
+
+status_file=".girt/status/$current_branch"
+touch $status_file
+trap 'rm -f $status_file; exit' INT TERM EXIT
+
+# check files in current directory
+for file in $(ls)
+do
+    # if a file is a directory, skip it
+    if test -d $file
+    then
+        continue
+    fi
+
+    # check if the file doesnt exist in the index
+    if test ! -f .girt/index/$current_branch/$file
+    then
+        # check if has doesnt exist in the repo
+        if test ! -f .girt/branches/$current_branch
+        then
+            echo "$file - untracked" >> .girt/status/$current_branch
+        fi
+    else
+        #check that the file in the index is the same as the one in the current directory 
+        file_check="$(diff $file .girt/index/$current_branch/$file)"
+        # file is the same in index, check if it exists in the repo
+        if test "$file_check" = "" &&  test ! -f .girt/branches/$current_branch/$file
+        then
+            echo "$file - added to index" >> .girt/status/$current_branch
+        elif test "$file_check" = "" &&  test -f .girt/branches/$current_branch/$file
+        then
+            # check if the file in the repo is the same as the file in the current directory
+            repo_check="$(diff $file .girt/branches/$current_branch/$file)"
+            if test "$repo_check" = ""
+            then
+                echo "$file - same as repo" >> .girt/status/$current_branch
+            else
+                echo "$file - file changed, changes staged for commit" >> .girt/status/$current_branch
+            fi
+        # file in index is different to current directory, check if the file is in the repo
+        elif test "$file_check" != "" && test -f .girt/branches/$current_branch/$file
+        then
+            # check if the file in repo is the same as the file in the index
+            repo_staged_check="$(diff .girt/index/$current_branch/$file .girt/branches/$current_branch/$file)"
+            if test "$repo_staged_check" != ""
+            then
+                echo "$file - file changed, different changes staged for commit" >> .girt/status/$current_branch
+            else
+                echo "$file - file changed, changes not staged for commit" >> .girt/status/$current_branch
+            fi
+        fi
+    fi
+done
+
+# check if an intial commit exists
+if test -d ".girt/commits/$current_branch/$current_commit_num"
+then
+    # check for deleted files by first looping through files that exist in the repo
+    for file in $(ls .girt/commits/$current_branch/$current_commit_num)
+    do
+        # check if the file does not exist in the current directory
+        if test ! -f $file
+        then
+            # check if the file does not exist in the index
+            if test ! -f .girt/index/$current_branch/$file
+            then
+                echo "$file - deleted" >> .girt/status/$current_branch
+            else
+                echo "$file - file deleted" >> .girt/status/$current_branch
+            fi
+        fi    
+    done
+fi
+
+
+checked_files="$(cut -d' ' -f1 .girt/status/$current_branch)"
+echo "$checked_files" > .girt/status/current_checked_files
+
+# check for files that got added to the index, but edited before being committed
+# by first looping through the files in the index
+if test -d .girt/index/$current_branch
+then
+    for file in $(ls .girt/index/$current_branch)
+    do
+        file_check="$(grep -E "$file" .girt/status/current_checked_files)"
+        if test "$file_check" != "" 
+        then
+            continue
+        fi
+        # check if the file exists in the current directory and does not exist in the repo
+        if test -f $file && test ! -f .girt/$current_branch/$current_commit_num/$file
+        then
+            file_check="$(diff $file .girt/index/$current_branch/$file)"
+            if test "$file_check" != ""
+            then
+                echo "$file - added to index, file changed" >> .girt/status/$current_branch
+            fi
+        # check if the file does not exist in both the current directory and the repo
+        elif test ! -f $file && test ! -f .girt/$current_branch/$current_commit_num/$file
+        then
+            echo "$file - added to index, file deleted" >> .girt/status/$current_branch
+        fi
+    done
+fi
+
+rm .girt/status/current_checked_files
+sort .girt/status/$current_branch
+rm .girt/status/$current_branch

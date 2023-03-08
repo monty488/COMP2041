@@ -1,0 +1,131 @@
+#!/bin/dash
+
+# function that checks if there is an intial commit and files
+# in the index
+check_index_and_initial_commit() {
+    # check if there has been an intial commit and there are
+    # files in the index
+    if test ! -d .girt/commits/$current_branch/0
+    then
+        if test -d .girt/index/$current_branch
+        then
+            num_files=$(ls .girt/index/$current_branch | wc -l)
+            if test $num_files -eq 0
+            then
+                echo "nothing to commit"
+                exit 0
+            fi
+        else
+            echo "nothing to commit"
+            exit 0
+        fi
+    fi       
+}
+# function that updates the files in the index and commits them
+commit_all_files() {
+
+    check_index_and_initial_commit
+
+    # update all files in the index
+    for file in $(ls .girt/index/$current_branch/$file)
+    do
+        # check if the file exists in the current directory,
+        # if it does, copy the file into the index,
+        # otherwise remove it.
+        if test -f $file
+        then
+            cp $file .girt/index/$current_branch 2>/dev/null
+        else
+            rm .girt/index/$current_branch/$file
+        fi
+    done
+
+    # check if the files in the index match the files in the latest commit
+    commit_check="$(diff -r .girt/index .girt/commits/$current_branch/$current_commit_num)"
+    if test "$commit_check" = ""
+    then
+        echo "nothing to commit"
+        exit 0
+    fi
+}
+
+
+# check if the .girt directory exists
+if ! test -d .girt
+then
+    echo "girt-commit: error: girt repository directory .girt not found"
+    exit 1
+fi
+
+current_branch=`head .girt/current_branch`
+num_of_lines=`wc -l .girt/logs/log | cut -d' ' -f1`
+current_commit_num=$(($num_of_lines - 1))
+
+
+# check the arguments given into girt-commit
+if test $# -lt 2
+then
+    echo "usage: girt-commit [-a] -m commit-message"
+else
+
+    # test if the index exists (if any files have been added to the index)
+    if test -d .girt/index/$current_branch
+    then
+        if test "$1" = "-a"
+        then
+            if test "$2" = "-m"
+            then
+                commit_all_files
+            else
+                echo "usage: girt-commit [-a] -m commit-message"
+                exit 1
+            fi
+        fi
+
+        check_index_and_initial_commit
+        # test if there are any commits from before
+        if test $num_of_lines -gt 0
+        then
+            # check if the files in the index are different to the latest commit
+            # (check if the files need to be committed)
+            commit_check="$(diff -r .girt/index/$current_branch .girt/commits/$current_branch/$current_commit_num)"
+            if test "$commit_check" = ""
+            then
+                echo "nothing to commit"
+                exit 0
+            fi
+        fi
+
+        # make a directory for the new commit
+        mkdir .girt/commits/$current_branch/$num_of_lines
+
+        # copy all the files into the commit, as well as into a folder that keeps track
+        # of all te files tied to that specific branch
+        for file in .girt/index/$current_branch/*
+        do
+            cp $file .girt/commits/$current_branch/$num_of_lines 2>/dev/null
+            cp $file .girt/branches/$current_branch 2>/dev/null
+        done
+
+        # update the log file
+        if test "$1" = "-a"
+        then
+            echo "$num_of_lines $3" >> .girt/logs/log
+        else
+            echo "$num_of_lines $2" >> .girt/logs/log
+        fi
+
+        # create a temp file that will be used
+        # to order the log file according to the specification
+        sort -r .girt/logs/log > .girt/log_reversed
+        cat .girt/log_reversed > .girt/logs/log
+        rm .girt/log_reversed
+
+
+        echo "Committed as commit $num_of_lines"
+
+    else
+        echo "nothing to commit"
+    fi
+
+fi
